@@ -1,0 +1,126 @@
+name: Deploy API Server
+
+on:
+  push:
+    branches:
+      - api-server
+  workflow_dispatch:
+
+jobs:
+  deploy-server:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: api-server
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          sudo apt-get update
+          sudo apt-get install -y git tar xz-utils
+
+      - name: Run health check
+        run: |
+          python -c "from app import app; print('Flask app imports successfully')"
+
+      - name: Start API server (background)
+        run: |
+          nohup python app.py > server.log 2>&1 &
+          sleep 3
+          echo "Server started, PID: $!"
+
+      - name: Test API endpoints
+        run: |
+          sleep 2
+          curl -f http://localhost:5000/health || exit 1
+          echo "✓ Health check passed"
+          curl -f http://localhost:5000/api/repos || exit 1
+          echo "✓ Repos endpoint passed"
+
+      - name: Upload server logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-logs
+          path: server.log
+          retention-days: 7
+
+  lint-and-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: api-server
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Syntax check
+        run: |
+          python -m py_compile app.py
+          echo "✓ Python syntax check passed"
+
+      - name: Check imports
+        run: |
+          python -c "import flask, flask_cors, requests, tarfile, sqlite3; print('✓ All required imports available')"
+
+      - name: Verify templates
+        run: |
+          if [ -f "templates/index.html" ]; then
+            echo "✓ Web UI template found"
+          else
+            echo "✗ Web UI template not found"
+            exit 1
+          fi
+
+  database-init:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: api-server
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Initialize database
+        run: |
+          python -c "from app import init_db; init_db(); print('✓ Database initialized successfully')"
+
+      - name: Verify database
+        run: |
+          if [ -f "gami_server.db" ]; then
+            echo "✓ Database file created"
+          else
+            echo "✗ Database file not found"
+            exit 1
+          fi
