@@ -1,0 +1,175 @@
+from flask import Flask, render_template, request, jsonify, send_file
+from flask_cors import CORS
+import sqlite3
+import os
+import requests
+import tarfile
+import io
+from datetime import datetime
+import json
+
+app = Flask(__name__)
+CORS(app)
+
+DATABASE = 'gami_server.db'
+MAIN_REPO = 'Minecatl1/GamiServer'
+GITHUB_API = 'https://api.github.com'
+
+def init_db():
+    """Initialize the database"""
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS repos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        url TEXT UNIQUE NOT NULL,
+        name TEXT NOT NULL,
+        added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )''')
+    conn.commit()
+    conn.close()
+
+def get_db():
+    """Get database connection"""
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+@app.route('/')
+def index():
+    """Serve the web UI"""
+    return render_template('index.html')
+
+@app.route('/api/repos', methods=['GET'])
+def get_repos():
+    """Get all repositories in the list"""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT * FROM repos ORDER BY added_at DESC')
+    repos = [dict(row) for row in c.fetchall()]
+    conn.close()
+    return jsonify(repos)
+
+@app.route('/api/repos', methods=['POST'])
+def add_repo():
+    """Add a new repository to the list"""
+    data = request.json
+    repo_url = data.get('url', '').strip()
+    
+    if not repo_url:
+        return jsonify({'error': 'Repository URL is required'}), 400
+    
+    # Validate GitHub URL
+    if 'github.com' not in repo_url:
+        return jsonify({'error': 'Must be a valid GitHub repository URL'}), 400
+    
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('INSERT INTO repos (url, name) VALUES (?, ?)', 
+                 (repo_url, repo_url.split('/')[-1].replace('.git', '')))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True, 'message': 'Repository added successfully'}), 201
+    except sqlite3.IntegrityError:
+        return jsonify({'error': 'Repository already in list'}), 409
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/repos/<int:repo_id>', methods=['DELETE'])
+def remove_repo(repo_id):
+    """Remove a repository from the list"""
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('DELETE FROM repos WHERE id = ?', (repo_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
+
+@app.route('/api/search', methods=['GET'])
+def search_repos():
+    """Search repositories by name or URL"""
+    query = request.args.get('q', '').strip()
+    
+    if not query:
+        return jsonify([])
+    
+    conn = get_db()
+    c = conn.cursor()
+    c.execute('SELECT * FROM repos WHERE url LIKE ? OR name LIKE ? ORDER BY added_at DESC',
+             (f'%{query}%', f'%{query}%'))
+    repos = [dict(row) for row in c.fetchall()]
+    conn.close()
+    return jsonify(repos)
+
+@app.route('/api/game/<game_id>')
+def get_game_package(game_id):
+    """
+    Fetch a game repository, package it, and return the tar.xz file
+    """
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        c.execute('SELECT * FROM repos WHERE name = ? OR id = ?', (game_id, game_id))
+        repo = c.fetchone()
+        conn.close()
+        
+        if not repo:
+            return jsonify({'error': f'Game "{game_id}" not found in list'}), 404
+        
+        repo_url = repo['url']
+        repo_name = repo['name']
+        
+        # Clone the repository
+        temp_dir = f'/tmp/{repo_name}_{datetime.now().timestamp()}'
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        clone_path = os.path.join(temp_dir, repo_name)
+        os.system(f'git clone {repo_url} {clone_path} 2>/dev/null')
+        
+        if not os.path.exists(clone_path):
+            return jsonify({'error': f'Failed to clone repository: {repo_url}'}), 500
+        
+        # Create tar.xz package
+        package_path = os.path.join(temp_dir, f'{repo_name}.tar.xz')
+        with tarfile.open(package_path, 'w:xz') as tar:
+            tar.add(clone_path, arcname=repo_name)
+        
+        # Read the package file
+        with open(package_path, 'rb') as f:
+            package_data = f.read()
+        
+        # Clean up
+        os.system(f'rm -rf {temp_dir}')
+        
+        return send_file(
+            io.BytesIO(package_data),
+            mimetype='application/x-xz',
+            as_attachment=True,
+            download_name=f'{repo_name}.tar.xz'
+        )
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/releases')
+def get_releases():
+    """Fetch releases from the main GamiServer repository"""
+    try:
+        headers = {}
+        if 'GITHUB_TOKEN' in os.environ:
+            headers['Authorization'] = f'token {os.environ["GITHUB_TOKEN"]}'
+        
+        response = requests.get(
+            f'{GITHUB_API}/repos/{MAIN_REPO}/releases',
+            headers=headers
+        )
+        response.raise_for_status()
+        releases = response.json()
+        
+        return jsonify(releases)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+if __name__ == '__main__':
+    init_db()
+    app.run(debug=False, host='0.0.0.0', port=5000)
