@@ -7,6 +7,8 @@ import tarfile
 import io
 from datetime import datetime
 import json
+import subprocess
+import shutil
 
 app = Flask(__name__)
 CORS(app)
@@ -124,9 +126,10 @@ def get_game_package(game_id):
         os.makedirs(temp_dir, exist_ok=True)
         
         clone_path = os.path.join(temp_dir, repo_name)
-        os.system(f'git clone {repo_url} {clone_path} 2>/dev/null')
+        result = subprocess.run(['git', 'clone', repo_url, clone_path], 
+                              capture_output=True, text=True)
         
-        if not os.path.exists(clone_path):
+        if result.returncode != 0:
             return jsonify({'error': f'Failed to clone repository: {repo_url}'}), 500
         
         # Create tar.xz package
@@ -139,7 +142,7 @@ def get_game_package(game_id):
             package_data = f.read()
         
         # Clean up
-        os.system(f'rm -rf {temp_dir}')
+        shutil.rmtree(temp_dir)
         
         return send_file(
             io.BytesIO(package_data),
@@ -169,6 +172,11 @@ def get_releases():
         return jsonify(releases)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/health')
+def health():
+    """Health check endpoint"""
+    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
 
 if __name__ == '__main__':
     init_db()
