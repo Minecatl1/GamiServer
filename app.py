@@ -9,13 +9,38 @@ from datetime import datetime
 import json
 import subprocess
 import shutil
+import logging
 
 app = Flask(__name__)
 CORS(app)
 
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 DATABASE = 'gami_server.db'
 MAIN_REPO = 'Minecatl1/GamiServer'
 GITHUB_API = 'https://api.github.com'
+
+def get_tunnel_url():
+    """Get Cloudflare Tunnel URL from environment or try to extract from logs"""
+    tunnel_url = os.environ.get('CLOUDFLARE_TUNNEL_URL')
+    if tunnel_url:
+        return tunnel_url
+    
+    # Try to read from cloudflared logs if running in Docker
+    try:
+        result = subprocess.run(['curl', '-s', 'http://127.0.0.1:40025/metrics'], 
+                              capture_output=True, text=True, timeout=2)
+        if result.returncode == 0:
+            # Parse metrics to find tunnel URL
+            for line in result.stdout.split('\n'):
+                if 'tunnel_url' in line or 'url' in line:
+                    logger.info(f"Tunnel metrics: {line}")
+    except:
+        pass
+    
+    return None
 
 def init_db():
     """Initialize the database"""
@@ -176,8 +201,36 @@ def get_releases():
 @app.route('/health')
 def health():
     """Health check endpoint"""
-    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
+    return jsonify({
+        'status': 'healthy', 
+        'timestamp': datetime.now().isoformat(),
+        'tunnel_url': get_tunnel_url()
+    })
+
+@app.route('/api/info')
+def info():
+    """Get server information including tunnel URL"""
+    tunnel_url = get_tunnel_url()
+    if not tunnel_url:
+        tunnel_url = os.environ.get('CLOUDFLARE_TUNNEL_URL', 'Tunnel URL not available')
+    
+    return jsonify({
+        'server': 'GamiServer API',
+        'version': '1.0.0',
+        'timestamp': datetime.now().isoformat(),
+        'tunnel_url': tunnel_url,
+        'tunnel_available': tunnel_url != 'Tunnel URL not available'
+    })
 
 if __name__ == '__main__':
     init_db()
+    logger.info("GamiServer API starting...")
+    
+    # Log tunnel URL if available
+    tunnel_url = get_tunnel_url()
+    if tunnel_url:
+        logger.info(f"✓ Cloudflare Tunnel available at: {tunnel_url}")
+    else:
+        logger.info("⚠ Cloudflare Tunnel not detected")
+    
     app.run(debug=False, host='0.0.0.0', port=5000)
