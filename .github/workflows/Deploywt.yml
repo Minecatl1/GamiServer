@@ -104,6 +104,7 @@ jobs:
           echo "### Tunnel Details" >> $GITHUB_STEP_SUMMARY
           echo "- **Created**: $(date)" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch**: api-server" >> $GITHUB_STEP_SUMMARY
+          sleep 120
 
       - name: Upload Logs
         if: always()
