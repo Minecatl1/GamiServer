@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GamiServer - Game Repository Manager</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 30px;
+        }
+        
+        @media (max-width: 768px) {
+            .content {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px solid #e9ecef;
+        }
+        
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        input[type="text"],
+        input[type="search"] {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus,
+        input[type="search"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        .repos-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        
+        .repo-item {
+            background: white;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .repo-info {
+            flex: 1;
+        }
+        
+        .repo-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 3px;
+        }
+        
+        .repo-url {
+            font-size: 0.85em;
+            color: #666;
+            word-break: break-all;
+        }
+        
+        .repo-actions {
+            display: flex;
+            gap: 10px;
+            margin-left: 10px;
+        }
+        
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 0.85em;
+        }
+        
+        .btn-download {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+        
+        .btn-delete {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        }
+        
+        .message {
+            padding: 12px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            display: none;
+        }
+        
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+        
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+        
+        .search-results {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+        
+        .search-result-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .search-result-item:hover {
+            background: #f0f0f0;
+        }
+        
+        .no-results {
+            text-align: center;
+            color: #999;
+            padding: 20px;
+        }
+        
+        .releases-section {
+            grid-column: 1 / -1;
+        }
+        
+        .release-item {
+            background: white;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #764ba2;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .release-tag {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .release-date {
+            font-size: 0.9em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎮 GamiServer</h1>
+            <p>Game Repository Manager & Package Distributor</p>
+        </header>
+        
+        <div class="content">
+            <!-- Add Repository Section -->
+            <div class="section">
+                <h2>➕ Add Repository</h2>
+                <div id="addRepoMessage" class="message"></div>
+                <form id="addRepoForm">
+                    <div class="form-group">
+                        <label for="repoUrl">GitHub Repository URL</label>
+                        <input type="text" id="repoUrl" placeholder="https://github.com/owner/repo" required>
+                    </div>
+                    <button type="submit">Add Repository</button>
+                </form>
+            </div>
+            
+            <!-- Search Repositories Section -->
+            <div class="section">
+                <h2>🔍 Search Repositories</h2>
+                <div class="form-group">
+                    <label for="searchInput">Search by name or URL</label>
+                    <input type="search" id="searchInput" placeholder="Search repositories...">
+                </div>
+                <div id="searchResults" class="search-results" style="display: none;">
+                    <div class="no-results">Search to display results</div>
+                </div>
+            </div>
+            
+            <!-- Repository List Section -->
+            <div class="section" style="grid-column: 1 / -1;">
+                <h2>📚 Repository List</h2>
+                <div id="reposList" class="repos-list">
+                    <div class="no-results">Loading repositories...</div>
+                </div>
+            </div>
+            
+            <!-- Releases Section -->
+            <div class="section releases-section">
+                <h2>📦 Latest Releases</h2>
+                <div id="releasesList">
+                    <div class="no-results">Loading releases...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = '/api';
+        
+        // Load repositories on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadRepositories();
+            loadReleases();
+        });
+        
+        // Add repository form handler
+        document.getElementById('addRepoForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('repoUrl').value.trim();
+            
+            try {
+                const response = await fetch(`${API_BASE}/repos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                
+                const data = await response.json();
+                const messageEl = document.getElementById('addRepoMessage');
+                
+                if (response.ok) {
+                    messageEl.textContent = 'Repository added successfully!';
+                    messageEl.className = 'message success';
+                    document.getElementById('repoUrl').value = '';
+                    loadRepositories();
+                } else {
+                    messageEl.textContent = data.error || 'Failed to add repository';
+                    messageEl.className = 'message error';
+                }
+            } catch (err) {
+                const messageEl = document.getElementById('addRepoMessage');
+                messageEl.textContent = 'Error: ' + err.message;
+                messageEl.className = 'message error';
+            }
+        });
+        
+        // Search handler
+        document.getElementById('searchInput').addEventListener('input', async (e) => {
+            const query = e.target.value.trim();
+            const resultsDiv = document.getElementById('searchResults');
+            
+            if (!query) {
+                resultsDiv.style.display = 'none';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/search?q=${encodeURIComponent(query)}`);
+                const results = await response.json();
+                
+                let html = '';
+                if (results.length > 0) {
+                    results.forEach(repo => {
+                        html += `
+                            <div class="search-result-item" onclick="copyToClipboard('${repo.url}')">
+                                <strong>${repo.name}</strong>
+                                <br>
+                                <small>${repo.url}</small>
+                            </div>
+                        `;
+                    });
+                } else {
+                    html = '<div class="no-results">No repositories found</div>';
+                }
+                
+                resultsDiv.innerHTML = html;
+                resultsDiv.style.display = 'block';
+            } catch (err) {
+                resultsDiv.innerHTML = '<div class="no-results">Search error: ' + err.message + '</div>';
+                resultsDiv.style.display = 'block';
+            }
+        });
+        
+        async function loadRepositories() {
+            try {
+                const response = await fetch(`${API_BASE}/repos`);
+                const repos = await response.json();
+                const listDiv = document.getElementById('reposList');
+                
+                if (repos.length === 0) {
+                    listDiv.innerHTML = '<div class="no-results">No repositories added yet</div>';
+                    return;
+                }
+                
+                let html = '';
+                repos.forEach(repo => {
+                    html += `
+                        <div class="repo-item">
+                            <div class="repo-info">
+                                <div class="repo-name">${repo.name}</div>
+                                <div class="repo-url">${repo.url}</div>
+                            </div>
+                            <div class="repo-actions">
+                                <button class="btn-small btn-download" onclick="downloadGame('${repo.name}')">Download</button>
+                                <button class="btn-small btn-delete" onclick="deleteRepo(${repo.id})">Remove</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                listDiv.innerHTML = html;
+            } catch (err) {
+                document.getElementById('reposList').innerHTML = '<div class="no-results">Error loading repositories: ' + err.message + '</div>';
+            }
+        }
+        
+        async function loadReleases() {
+            try {
+                const response = await fetch(`${API_BASE}/releases`);
+                const releases = await response.json();
+                const listDiv = document.getElementById('releasesList');
+                
+                if (!Array.isArray(releases) || releases.length === 0) {
+                    listDiv.innerHTML = '<div class="no-results">No releases available</div>';
+                    return;
+                }
+                
+                let html = '';
+                releases.slice(0, 5).forEach(release => {
+                    const date = new Date(release.created_at).toLocaleDateString();
+                    html += `
+                        <div class="release-item">
+                            <div class="release-tag">${release.tag_name}</div>
+                            <div class="release-date">Released: ${date}</div>
+                        </div>
+                    `;
+                });
+                
+                listDiv.innerHTML = html;
+            } catch (err) {
+                document.getElementById('releasesList').innerHTML = '<div class="no-results">Error loading releases</div>';
+            }
+        }
+        
+        async function deleteRepo(id) {
+            if (!confirm('Are you sure you want to remove this repository?')) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/repos/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    loadRepositories();
+                }
+            } catch (err) {
+                alert('Error deleting repository: ' + err.message);
+            }
+        }
+        
+        function downloadGame(gameName) {
+            window.location.href = `${API_BASE}/game/${gameName}`;
+        }
+        
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text);
+            alert('Repository URL copied to clipboard!');
+        }
+    </script>
+</body>
+</html>
