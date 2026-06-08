@@ -1,0 +1,4 @@
+# GamiServer Repository List
+# Add GitHub repository URLs here, one per line
+# Example format: https://github.com/owner/repo
+
